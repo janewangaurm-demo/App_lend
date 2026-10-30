@@ -17,5 +17,108 @@
   <header class="header">
     <h1>設備管理</h1>
   </header>
+
+  <main class="container">
+    <section>
+      <h2>新增器材</h2>
+      <form id="equipment-form" class="form">
+        <label for="name">名稱</label>
+        <input type="text" id="name" required>
+
+        <label for="type">類型</label>
+        <select id="type" required>
+          <option value="">請選擇類型</option>
+          <option value="相機">相機</option>
+          <option value="投影機">投影機</option>
+          <option value="麥克風">麥克風</option>
+          <option value="腳架">腳架</option>
+        </select>
+
+        <label for="asset-no">財產編號</label>
+        <input type="text" id="asset-no" required>
+
+        <button type="submit">新增</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>器材清單</h2>
+      <ul id="equipment-list" class="equipment-list"></ul>
+      <p id="empty-message" class="empty-message">目前沒有器材。</p>
+    </section>
+  </main>
+
+  <script>
+    var STORAGE_KEY = "equipment";
+
+    var form = document.getElementById("equipment-form");
+    var listEl = document.getElementById("equipment-list");
+    var emptyEl = document.getElementById("empty-message");
+
+    function loadEquipment() {
+      try {
+        var data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        return Array.isArray(data) ? data : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveEquipment(items) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function render() {
+      var items = loadEquipment();
+      listEl.innerHTML = "";
+
+      items.forEach(function (item) {
+        var li = document.createElement("li");
+        li.className = "card";
+
+        var title = document.createElement("h3");
+        title.textContent = item.name;
+
+        var info = document.createElement("p");
+        info.textContent = "類型：" + item.type + "　財產編號：" + item.assetNo;
+
+        li.appendChild(title);
+        li.appendChild(info);
+        listEl.appendChild(li);
+      });
+
+      emptyEl.style.display = items.length === 0 ? "block" : "none";
+    }
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      var name = document.getElementById("name").value.trim();
+      var type = document.getElementById("type").value;
+      var assetNo = document.getElementById("asset-no").value.trim();
+
+      if (!name || !type || !assetNo) {
+        return;
+      }
+
+      var items = loadEquipment();
+      items.push({ name: name, type: type, assetNo: assetNo });
+
+      if (!saveEquipment(items)) {
+        alert("無法儲存資料，請確認瀏覽器是否允許使用 localStorage。");
+        return;
+      }
+
+      form.reset();
+      render();
+    });
+
+    render();
+  </script>
 </body>
 </html>
