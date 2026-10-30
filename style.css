@@ -104,3 +104,29 @@ section + section {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.navbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.navbar a {
+  padding: 6px 14px;
+  color: #444;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.navbar a:hover {
+  background: #eef2fb;
+}
+
+.navbar a.active {
+  color: #fff;
+  background: #3b6fd4;
+}
