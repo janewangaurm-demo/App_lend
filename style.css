@@ -130,3 +130,45 @@ section + section {
   color: #fff;
   background: #3b6fd4;
 }
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.form label {
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.form input,
+.form select {
+  padding: 8px 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid #cfd4dc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.form button {
+  margin-top: 10px;
+  padding: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #fff;
+  background: #3b6fd4;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.empty-message {
+  margin: 0;
+  color: #777;
+}
