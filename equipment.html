@@ -20,105 +20,90 @@
 
   <main class="container">
     <section>
-      <h2>新增器材</h2>
-      <form id="equipment-form" class="form">
-        <label for="name">名稱</label>
-        <input type="text" id="name" required>
-
-        <label for="type">類型</label>
-        <select id="type" required>
-          <option value="">請選擇類型</option>
-          <option value="相機">相機</option>
-          <option value="投影機">投影機</option>
-          <option value="麥克風">麥克風</option>
-          <option value="腳架">腳架</option>
-        </select>
-
-        <label for="asset-no">財產編號</label>
-        <input type="text" id="asset-no" required>
-
-        <button type="submit">新增</button>
-      </form>
-    </section>
-
-    <section>
       <h2>器材清單</h2>
+      <p id="message" class="empty-message">載入中…</p>
       <ul id="equipment-list" class="equipment-list"></ul>
-      <p id="empty-message" class="empty-message">目前沒有器材。</p>
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    var STORAGE_KEY = "equipment";
+    var SUPABASE_URL = "https://dbywfejnmqrnpzhsimty.supabase.co";
+    var SUPABASE_ANON_KEY = "sb_publishable_piLcRNMih7EycEiUmK6ivQ_LMNXvfeb";
 
-    var form = document.getElementById("equipment-form");
+    var STATUS_CLASS = {
+      "可借用": "badge-available",
+      "借出中": "badge-borrowed",
+      "維修中": "badge-repair",
+      "報廢": "badge-retired"
+    };
+
     var listEl = document.getElementById("equipment-list");
-    var emptyEl = document.getElementById("empty-message");
+    var messageEl = document.getElementById("message");
 
-    function loadEquipment() {
-      try {
-        var data = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        return Array.isArray(data) ? data : [];
-      } catch (e) {
-        return [];
-      }
+    function showMessage(text) {
+      messageEl.textContent = text;
+      messageEl.style.display = "block";
     }
 
-    function saveEquipment(items) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    function render() {
-      var items = loadEquipment();
+    function render(items) {
       listEl.innerHTML = "";
 
       items.forEach(function (item) {
         var li = document.createElement("li");
         li.className = "card";
 
+        var head = document.createElement("div");
+        head.className = "card-head";
+
         var title = document.createElement("h3");
         title.textContent = item.name;
 
-        var info = document.createElement("p");
-        info.textContent = "類型：" + item.type + "　財產編號：" + item.assetNo;
+        var badge = document.createElement("span");
+        badge.className = "badge " + (STATUS_CLASS[item.status] || "");
+        badge.textContent = item.status;
 
-        li.appendChild(title);
+        head.appendChild(title);
+        head.appendChild(badge);
+
+        var info = document.createElement("p");
+        info.textContent = "設備編號：" + item.asset_no + "　類別：" + item.category;
+
+        li.appendChild(head);
         li.appendChild(info);
         listEl.appendChild(li);
       });
-
-      emptyEl.style.display = items.length === 0 ? "block" : "none";
     }
 
-    form.addEventListener("submit", function (event) {
-      event.preventDefault();
+    async function loadEquipment() {
+      try {
+        var client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      var name = document.getElementById("name").value.trim();
-      var type = document.getElementById("type").value;
-      var assetNo = document.getElementById("asset-no").value.trim();
+        var result = await client
+          .from("equipment")
+          .select("asset_no, name, category, status")
+          .order("asset_no", { ascending: true });
 
-      if (!name || !type || !assetNo) {
-        return;
+        if (result.error) {
+          showMessage("無法載入設備資料，請稍後再試。");
+          console.error(result.error);
+          return;
+        }
+
+        if (result.data.length === 0) {
+          showMessage("目前沒有設備資料。");
+          return;
+        }
+
+        messageEl.style.display = "none";
+        render(result.data);
+      } catch (e) {
+        showMessage("無法載入設備資料，請稍後再試。");
+        console.error(e);
       }
+    }
 
-      var items = loadEquipment();
-      items.push({ name: name, type: type, assetNo: assetNo });
-
-      if (!saveEquipment(items)) {
-        alert("無法儲存資料，請確認瀏覽器是否允許使用 localStorage。");
-        return;
-      }
-
-      form.reset();
-      render();
-    });
-
-    render();
+    loadEquipment();
   </script>
 </body>
 </html>
