@@ -20,6 +20,30 @@
   </header>
 
   <main class="container">
+    <section id="add-section" hidden>
+      <h2>新增器材</h2>
+      <form id="add-form" class="form">
+        <label for="asset-no">設備編號</label>
+        <input type="text" id="asset-no" required>
+
+        <label for="name">名稱</label>
+        <input type="text" id="name" required>
+
+        <label for="category">類別</label>
+        <select id="category" required>
+          <option value="">請選擇類別</option>
+          <option value="相機">相機</option>
+          <option value="投影機">投影機</option>
+          <option value="麥克風">麥克風</option>
+          <option value="腳架">腳架</option>
+        </select>
+
+        <p id="add-message" class="form-error"></p>
+
+        <button type="submit" id="add-btn">新增</button>
+      </form>
+    </section>
+
     <section>
       <h2>器材清單</h2>
       <p id="message" class="empty-message">載入中…</p>
@@ -37,44 +61,68 @@
       "報廢": "badge-retired"
     };
 
+    // 管理者手動可選的狀態：借出中由借還紀錄自動變更，報廢後不可再改
+    var STATUS_OPTIONS = {
+      "可借用": ["可借用", "維修中", "報廢"],
+      "維修中": ["維修中", "可借用", "報廢"]
+    };
+
     var listEl = document.getElementById("equipment-list");
     var messageEl = document.getElementById("message");
+    var addSection = document.getElementById("add-section");
+    var addForm = document.getElementById("add-form");
+    var addMessage = document.getElementById("add-message");
+    var addBtn = document.getElementById("add-btn");
+
+    var items = [];
+    var isAdmin = false;
+    var editingAsset = null;
+    var loadFailed = false;
 
     function showMessage(text) {
       messageEl.textContent = text;
       messageEl.style.display = "block";
     }
 
-    function render(items) {
-      listEl.innerHTML = "";
+    function describeError(error, fallback) {
+      if (error.code === "23505") {
+        return "此設備編號已存在。";
+      }
+      if (error.code === "42501") {
+        return "沒有權限執行此操作。";
+      }
+      if (error.code === "P0001") {
+        return error.message;
+      }
+      return fallback + "，請稍後再試。";
+    }
 
-      items.forEach(function (item) {
-        var li = document.createElement("li");
-        li.className = "card";
+    // ---------- 讀取 ----------
 
-        var head = document.createElement("div");
-        head.className = "card-head";
-
-        var title = document.createElement("h3");
-        title.textContent = item.name;
-
-        var badge = document.createElement("span");
-        badge.className = "badge " + (STATUS_CLASS[item.status] || "");
-        badge.textContent = item.status;
-
-        head.appendChild(title);
-        head.appendChild(badge);
-
-        var info = document.createElement("p");
-        info.textContent = "設備編號：" + item.asset_no + "　類別：" + item.category;
-
-        li.appendChild(head);
-        li.appendChild(info);
-        listEl.appendChild(li);
-      });
+    async function checkAdmin() {
+      try {
+        var sessionResult = await db.auth.getSession();
+        var session = sessionResult.data.session;
+        if (!session) {
+          return false;
+        }
+        var result = await db
+          .from("profiles")
+          .select("role")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        if (result.error || !result.data) {
+          return false;
+        }
+        return result.data.role === "admin";
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
     }
 
     async function loadEquipment() {
+      loadFailed = false;
       try {
         var result = await db
           .from("equipment")
@@ -82,25 +130,334 @@
           .order("asset_no", { ascending: true });
 
         if (result.error) {
-          showMessage("無法載入設備資料，請稍後再試。");
+          loadFailed = true;
           console.error(result.error);
           return;
         }
-
-        if (result.data.length === 0) {
-          showMessage("目前沒有設備資料。");
-          return;
-        }
-
-        messageEl.style.display = "none";
-        render(result.data);
+        items = result.data;
       } catch (e) {
-        showMessage("無法載入設備資料，請稍後再試。");
+        loadFailed = true;
         console.error(e);
       }
     }
 
-    loadEquipment();
+    // ---------- 畫面 ----------
+
+    function buildView(item) {
+      var box = document.createElement("div");
+
+      var head = document.createElement("div");
+      head.className = "card-head";
+
+      var title = document.createElement("h3");
+      title.textContent = item.name;
+
+      var badge = document.createElement("span");
+      badge.className = "badge " + (STATUS_CLASS[item.status] || "");
+      badge.textContent = item.status;
+
+      head.appendChild(title);
+      head.appendChild(badge);
+
+      var info = document.createElement("p");
+      info.textContent = "設備編號：" + item.asset_no + "　類別：" + item.category;
+
+      box.appendChild(head);
+      box.appendChild(info);
+
+      if (isAdmin) {
+        var actions = document.createElement("div");
+        actions.className = "card-actions";
+
+        var editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "btn";
+        editBtn.textContent = "編輯";
+        editBtn.addEventListener("click", function () {
+          editingAsset = item.asset_no;
+          render();
+        });
+
+        var delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn btn-danger";
+        delBtn.textContent = "刪除";
+        delBtn.addEventListener("click", function () {
+          deleteItem(item);
+        });
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+        box.appendChild(actions);
+      }
+
+      return box;
+    }
+
+    function buildEditForm(item) {
+      var form = document.createElement("form");
+      form.className = "edit-form";
+
+      var fixed = document.createElement("p");
+      fixed.className = "fixed-info";
+      fixed.textContent =
+        "設備編號：" + item.asset_no + "　類別：" + item.category + "（不可修改）";
+
+      var nameLabel = document.createElement("label");
+      nameLabel.textContent = "設備名稱";
+      var nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.required = true;
+      nameInput.value = item.name;
+      nameLabel.appendChild(nameInput);
+
+      var statusLabel = document.createElement("label");
+      statusLabel.textContent = "狀態";
+      var statusSelect = document.createElement("select");
+      var options = STATUS_OPTIONS[item.status];
+
+      if (options) {
+        options.forEach(function (status) {
+          var opt = document.createElement("option");
+          opt.value = status;
+          opt.textContent = status;
+          statusSelect.appendChild(opt);
+        });
+        statusSelect.value = item.status;
+      } else {
+        var only = document.createElement("option");
+        only.value = item.status;
+        only.textContent = item.status;
+        statusSelect.appendChild(only);
+        statusSelect.disabled = true;
+      }
+      statusLabel.appendChild(statusSelect);
+
+      form.appendChild(fixed);
+      form.appendChild(nameLabel);
+      form.appendChild(statusLabel);
+
+      if (!options) {
+        var hint = document.createElement("p");
+        hint.className = "fixed-info";
+        hint.textContent =
+          item.status === "借出中"
+            ? "借出中的狀態由借還紀錄自動變更，無法手動修改。"
+            : "已報廢的設備無法再變更狀態。";
+        form.appendChild(hint);
+      }
+
+      var actions = document.createElement("div");
+      actions.className = "card-actions";
+
+      var saveBtn = document.createElement("button");
+      saveBtn.type = "submit";
+      saveBtn.className = "btn btn-primary";
+      saveBtn.textContent = "儲存";
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = "取消";
+      cancelBtn.addEventListener("click", function () {
+        editingAsset = null;
+        render();
+      });
+
+      actions.appendChild(saveBtn);
+      actions.appendChild(cancelBtn);
+      form.appendChild(actions);
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        saveEdit(item, nameInput.value.trim(), statusSelect.value, saveBtn);
+      });
+
+      return form;
+    }
+
+    function render() {
+      listEl.innerHTML = "";
+
+      if (loadFailed) {
+        showMessage("無法載入設備資料，請稍後再試。");
+        return;
+      }
+      if (items.length === 0) {
+        showMessage("目前沒有設備資料。");
+        return;
+      }
+      messageEl.style.display = "none";
+
+      items.forEach(function (item) {
+        var li = document.createElement("li");
+        li.className = "card";
+        if (isAdmin && editingAsset === item.asset_no) {
+          li.appendChild(buildEditForm(item));
+        } else {
+          li.appendChild(buildView(item));
+        }
+        listEl.appendChild(li);
+      });
+    }
+
+    // ---------- 修改、刪除 ----------
+
+    async function saveEdit(item, name, status, saveBtn) {
+      if (!name) {
+        alert("請輸入設備名稱。");
+        return;
+      }
+
+      var changes = {};
+      if (name !== item.name) {
+        changes.name = name;
+      }
+      if (status !== item.status) {
+        changes.status = status;
+      }
+
+      if (Object.keys(changes).length === 0) {
+        editingAsset = null;
+        render();
+        return;
+      }
+
+      if (changes.status === "報廢" &&
+          !confirm("報廢後無法再變更狀態，系統會自動記錄今天為報廢日。確定要報廢嗎？")) {
+        return;
+      }
+
+      saveBtn.disabled = true;
+      try {
+        var result = await db
+          .from("equipment")
+          .update(changes)
+          .eq("asset_no", item.asset_no)
+          .select("asset_no");
+
+        if (result.error) {
+          alert(describeError(result.error, "儲存失敗"));
+          console.error(result.error);
+          saveBtn.disabled = false;
+          return;
+        }
+        if (!result.data || result.data.length === 0) {
+          alert("儲存失敗：沒有權限，或設備已不存在。");
+          saveBtn.disabled = false;
+          return;
+        }
+
+        editingAsset = null;
+        await loadEquipment();
+        render();
+      } catch (e) {
+        alert("儲存失敗，請稍後再試。");
+        console.error(e);
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function deleteItem(item) {
+      if (!confirm("確定要刪除「" + item.name + "」（" + item.asset_no + "）嗎？此動作無法復原。")) {
+        return;
+      }
+
+      try {
+        var result = await db
+          .from("equipment")
+          .delete()
+          .eq("asset_no", item.asset_no)
+          .select("asset_no");
+
+        if (result.error) {
+          if (result.error.code === "23503") {
+            alert("此設備已有借用記錄，無法刪除。若不再使用，請將狀態改為報廢。");
+          } else {
+            alert(describeError(result.error, "刪除失敗"));
+          }
+          console.error(result.error);
+          return;
+        }
+        if (!result.data || result.data.length === 0) {
+          alert("刪除失敗：沒有權限，或設備已不存在。");
+          return;
+        }
+
+        await loadEquipment();
+        render();
+      } catch (e) {
+        alert("刪除失敗，請稍後再試。");
+        console.error(e);
+      }
+    }
+
+    // ---------- 新增 ----------
+
+    addForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      addMessage.textContent = "";
+
+      var assetNo = document.getElementById("asset-no").value.trim();
+      var name = document.getElementById("name").value.trim();
+      var category = document.getElementById("category").value;
+
+      if (!assetNo || !name || !category) {
+        addMessage.textContent = "請完整填寫所有欄位。";
+        return;
+      }
+
+      addBtn.disabled = true;
+      try {
+        // 新增日期、狀態由資料庫自動填入，這裡不傳
+        var result = await db
+          .from("equipment")
+          .insert({ asset_no: assetNo, name: name, category: category });
+
+        if (result.error) {
+          addMessage.textContent = describeError(result.error, "新增失敗");
+          console.error(result.error);
+          return;
+        }
+
+        addForm.reset();
+        await loadEquipment();
+        render();
+      } catch (e) {
+        addMessage.textContent = "新增失敗，請稍後再試。";
+        console.error(e);
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+
+    // ---------- 啟動 ----------
+
+    async function init() {
+      var adminPromise = checkAdmin();
+      await loadEquipment();
+      isAdmin = await adminPromise;
+      addSection.hidden = !isAdmin;
+      render();
+    }
+
+    // 在本頁登入或登出時，更新管理者介面（身分沒變就不動，避免打斷編輯中的內容）
+    db.auth.onAuthStateChange(function (event) {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT") {
+        return;
+      }
+      setTimeout(async function () {
+        var nowAdmin = await checkAdmin();
+        if (nowAdmin !== isAdmin) {
+          isAdmin = nowAdmin;
+          editingAsset = null;
+          addSection.hidden = !isAdmin;
+          render();
+        }
+      }, 0);
+    });
+
+    init();
   </script>
 </body>
 </html>
