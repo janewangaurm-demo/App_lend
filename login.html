@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登入｜資管系器材借用系統</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html">首頁</a>
+    <a href="equipment.html">設備管理</a>
+    <a href="loans.html">借還管理</a>
+    <a href="report.html">借用統計</a>
+    <a href="login.html" id="auth-link" class="active">登入</a>
+  </nav>
+
+  <header class="header">
+    <h1>登入</h1>
+  </header>
+
+  <main class="container">
+    <form id="login-form" class="form">
+      <label for="email">學校信箱</label>
+      <input type="email" id="email" placeholder="學號@o365.au.edu.tw" autocomplete="username" required>
+
+      <label for="password">密碼</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+
+      <p id="form-message" class="form-error"></p>
+
+      <button type="submit" id="submit-btn">登入</button>
+    </form>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+  <script>
+    var form = document.getElementById("login-form");
+    var messageEl = document.getElementById("form-message");
+    var submitBtn = document.getElementById("submit-btn");
+
+    function translateError(error) {
+      var msg = (error.message || "").toLowerCase();
+      if (msg.indexOf("invalid login credentials") !== -1) {
+        return "信箱或密碼錯誤。";
+      }
+      if (msg.indexOf("email not confirmed") !== -1) {
+        return "此信箱尚未完成驗證，請先到信箱點擊驗證連結。";
+      }
+      return "登入失敗，請稍後再試。";
+    }
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      messageEl.textContent = "";
+      submitBtn.disabled = true;
+
+      var email = document.getElementById("email").value.trim().toLowerCase();
+      var password = document.getElementById("password").value;
+
+      try {
+        var result = await db.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (result.error) {
+          messageEl.textContent = translateError(result.error);
+          console.error(result.error);
+          submitBtn.disabled = false;
+          return;
+        }
+
+        window.location.href = "index.html";
+      } catch (e) {
+        messageEl.textContent = "登入失敗，請稍後再試。";
+        console.error(e);
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
