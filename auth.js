@@ -1,5 +1,5 @@
-var SUPABASE_URL = "https://你的專案代號.supabase.co";
-var SUPABASE_ANON_KEY = "你的 anon key";
+var SUPABASE_URL = "https://dbywfejnmqrnpzhsimty.supabase.co";
+var SUPABASE_ANON_KEY = "sb_publishable_piLcRNMih7EycEiUmK6ivQ_LMNXvfeb";
 
 // 全站共用的 Supabase 連線
 var db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
