@@ -12,6 +12,7 @@
     <a href="equipment.html" class="active">設備管理</a>
     <a href="loans.html">借還管理</a>
     <a href="report.html">借用統計</a>
+    <a href="login.html" id="auth-link">登入</a>
   </nav>
 
   <header class="header">
@@ -27,10 +28,8 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
   <script>
-    var SUPABASE_URL = "https://dbywfejnmqrnpzhsimty.supabase.co";
-    var SUPABASE_ANON_KEY = "sb_publishable_piLcRNMih7EycEiUmK6ivQ_LMNXvfeb";
-
     var STATUS_CLASS = {
       "可借用": "badge-available",
       "借出中": "badge-borrowed",
@@ -77,9 +76,7 @@
 
     async function loadEquipment() {
       try {
-        var client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        var result = await client
+        var result = await db
           .from("equipment")
           .select("asset_no, name, category, status")
           .order("asset_no", { ascending: true });
