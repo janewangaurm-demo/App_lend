@@ -239,3 +239,21 @@ section + section {
   font-size: 0.9rem;
   color: #777;
 }
+
+.form-link {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.form-link a {
+  color: #3b6fd4;
+}
+
+.form-success {
+  padding: 14px 18px;
+  color: #1d7a3a;
+  background: #e3f5e8;
+  border-radius: 8px;
+}
