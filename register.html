@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>註冊｜資管系器材借用系統</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html">首頁</a>
+    <a href="equipment.html">設備管理</a>
+    <a href="loans.html">借還管理</a>
+    <a href="report.html">借用統計</a>
+    <a href="login.html" id="auth-link">登入</a>
+  </nav>
+
+  <header class="header">
+    <h1>註冊</h1>
+    <p class="tagline">請使用學校信箱註冊。</p>
+  </header>
+
+  <main class="container">
+    <form id="register-form" class="form">
+      <label for="email">學校信箱</label>
+      <input type="email" id="email" placeholder="學號@o365.au.edu.tw" autocomplete="username" required>
+
+      <label for="password">密碼（至少 8 個字元）</label>
+      <input type="password" id="password" minlength="8" autocomplete="new-password" required>
+
+      <label for="password2">再輸入一次密碼</label>
+      <input type="password" id="password2" minlength="8" autocomplete="new-password" required>
+
+      <p id="form-message" class="form-error"></p>
+
+      <button type="submit" id="submit-btn">註冊</button>
+    </form>
+
+    <p id="success-message" class="form-success" hidden></p>
+
+    <p class="form-link">已經有帳號？<a href="login.html">前往登入</a></p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth.js"></script>
+  <script>
+    var SCHOOL_EMAIL = /^[a-z0-9]+@o365\.au\.edu\.tw$/;
+
+    var form = document.getElementById("register-form");
+    var messageEl = document.getElementById("form-message");
+    var successEl = document.getElementById("success-message");
+    var submitBtn = document.getElementById("submit-btn");
+
+    function translateError(error) {
+      var code = error.code || "";
+      var msg = (error.message || "").toLowerCase();
+
+      if (code === "weak_password" || msg.indexOf("password") !== -1) {
+        return "密碼強度不足，請使用至少 8 個字元，並避免過於簡單的密碼。";
+      }
+      if (code === "over_email_send_rate_limit" || code === "over_request_rate_limit") {
+        return "操作太頻繁，請稍後再試。";
+      }
+      if (code === "user_already_exists") {
+        return "此信箱已註冊，請直接登入。";
+      }
+      // 資料庫 trigger 擋下非學校信箱時，Supabase 會回這個通用錯誤
+      if (msg.indexOf("database error") !== -1) {
+        return "註冊失敗，請確認使用的是學校信箱（學號@o365.au.edu.tw）。";
+      }
+      return "註冊失敗，請稍後再試。";
+    }
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      messageEl.textContent = "";
+
+      var email = document.getElementById("email").value.trim().toLowerCase();
+      var password = document.getElementById("password").value;
+      var password2 = document.getElementById("password2").value;
+
+      if (!SCHOOL_EMAIL.test(email)) {
+        messageEl.textContent = "請使用學校信箱，格式為 學號@o365.au.edu.tw。";
+        return;
+      }
+      if (password.length < 8) {
+        messageEl.textContent = "密碼至少需要 8 個字元。";
+        return;
+      }
+      if (password !== password2) {
+        messageEl.textContent = "兩次輸入的密碼不一致。";
+        return;
+      }
+
+      submitBtn.disabled = true;
+      try {
+        var result = await db.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            emailRedirectTo: new URL("login.html", window.location.href).href
+          }
+        });
+
+        if (result.error) {
+          messageEl.textContent = translateError(result.error);
+          console.error(result.error);
+          submitBtn.disabled = false;
+          return;
+        }
+
+        // 若後台沒開啟信箱驗證，註冊後會直接登入
+        if (result.data.session) {
+          window.location.href = "index.html";
+          return;
+        }
+
+        form.hidden = true;
+        successEl.textContent =
+          "註冊成功！驗證信已寄到 " + email + "，請點擊信中的連結完成驗證後再登入。";
+        successEl.hidden = false;
+      } catch (e) {
+        messageEl.textContent = "註冊失敗，請稍後再試。";
+        console.error(e);
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
